@@ -9,10 +9,12 @@
 #include <linux/udp.h>
 #include <linux/ip.h>
 #include <linux/icmp.h>
-#include <net/ip.h>
 #include <linux/proc_fs.h>  /* Necessary because we use the proc fs */
+#include <linux/list.h>
+#include <net/ip.h>
 #include <asm/uaccess.h>	/* For copy_from_user  */
- 
+#include "nl_int.h"
+
 struct nf_hook_ops nfho;   //net filter hook option struct
 struct sk_buff *sock_buff;
 struct udphdr *udp_header;          // UDP header struct
@@ -20,7 +22,22 @@ struct iphdr *ip_header;            // IP header struct
 struct icmphdr *icmp_header;		// ICMP Header
  
 #define skb_filter_name "skb_filter"
+
+struct c_ip_addr
+{
+   __u32   ip_addr;  // Условный ип адрес ipv6 must be 128 bit
+};
+
+struct filter_rule {
+     
+    struct c_ip_addr ia;
+    __u16 proto;
+    __u16 port;
+    struct list_head list; /* kernel's list structure */
+};
  
+static struct filter_rule frList;
+
 static struct proc_dir_entry *skb_filter;
  
 static int filter_value = 0;
@@ -103,10 +120,14 @@ int skb_write(struct file *file, const char *buffer, unsigned long len,
 }
  
 int init_module()
-{
+{   
+    struct filter_rule* a_new_fr;
+
     struct proc_dir_entry proc_root;
     int ret = 0;
- 
+    
+    LIST_HEAD(frList);
+	
     skb_filter = create_proc_entry( skb_filter_name, 0644, NULL);
  
     // If we cannot create the proc entry
@@ -134,7 +155,9 @@ int init_module()
     nf_register_hook(&nfho);
  
     printk(KERN_INFO "Registering SK Parse Module\n");
- 
+    
+    nl_init();
+
 error:
     return ret;
 }
@@ -145,7 +168,9 @@ void cleanup_module()
  
     if ( skb_filter )
         remove_proc_entry(skb_filter_name, NULL);
- 
+    
+    nl_exit();
+
     printk(KERN_INFO "Unregistered the SK Parse Module\n");
 }
  
