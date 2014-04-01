@@ -46,7 +46,7 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "3AC2966405329F6504EF77C");
+MODULE_INFO(srcversion, "AFDA7EE6539DB3802B6E940");
 
 static const struct rheldata _rheldata __used
 __attribute__((section(".rheldata"))) = {

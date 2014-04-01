@@ -164,9 +164,8 @@ unsigned int hook_func(unsigned int hooknum,
         if(icmp_header){		
 	    // printk(KERN_INFO "SRC: (%pM) --> DST: (%pM)\n",ethheader->h_source,ethheader->h_dest);
 
-            if(ethheader && !out) printk(KERN_INFO "SRC: (%pM) --> DST: (%pM)\n",ethheader->h_source,ethheader->h_dest); // WTH On postrouting we got freeze when try access hw address 
-	    //if(ethheader->h_source) printk(KERN_INFO "SRC: (%pM) -->",ethheader->h_source);
-	    //if(ethheader->h_dest) printk(KERN_INFO " DST: (%pM)\n",ethheader->h_dest); else printk(" \n");
+            if(ethheader && skb_mac_header_was_set(skb)) printk(KERN_INFO "SRC: (%pM) --> DST: (%pM)\n",ethheader->h_source,ethheader->h_dest); 
+
             printk(KERN_INFO "SRC: (%u.%u.%u.%u) --> DST: (%u.%u.%u.%u)\n",NIPQUAD(ip_header->saddr),NIPQUAD(ip_header->daddr));
             printk(KERN_INFO "ICMP type: %d - ICMP code: %d  in %s  out %s \n",icmp_header->type, icmp_header->code,in!=NULL?"true":"false",out!=NULL?"true":"false");
         }else
