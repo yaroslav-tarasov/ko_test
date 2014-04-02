@@ -18,24 +18,31 @@ static const struct modversion_info ____versions[]
 __used
 __attribute__((section("__versions"))) = {
 	{ 0x14522340, "module_layout" },
+	{ 0x5a34a45c, "__kmalloc" },
+	{ 0xffcfa799, "rt_mutex_lock" },
 	{ 0x79aa04a2, "get_random_bytes" },
 	{ 0xd691cba2, "malloc_sizes" },
+	{ 0xa367b551, "__rt_mutex_init" },
 	{ 0x1a6d6e4f, "remove_proc_entry" },
 	{ 0x3758301, "mutex_unlock" },
 	{ 0xca975b7a, "nf_register_hook" },
 	{ 0x343a1a8, "__list_add" },
 	{ 0x8ce3169d, "netlink_kernel_create" },
 	{ 0xea147363, "printk" },
+	{ 0x2fa5a500, "memcmp" },
 	{ 0xd4defbf4, "netlink_kernel_release" },
 	{ 0x779d7efc, "netlink_rcv_skb" },
 	{ 0xb4390f9a, "mcount" },
 	{ 0xfee8a795, "mutex_lock" },
 	{ 0x521445b, "list_del" },
+	{ 0x53a0a777, "rt_mutex_unlock" },
 	{ 0x1c740bd6, "init_net" },
 	{ 0x6d6b15ff, "create_proc_entry" },
 	{ 0x2044fa9e, "kmem_cache_alloc_trace" },
+	{ 0x642e54ac, "__wake_up" },
 	{ 0x7e5a6ea3, "nf_unregister_hook" },
 	{ 0x37a0cba, "kfree" },
+	{ 0x236c8c64, "memcpy" },
 	{ 0xb742fd7, "simple_strtol" },
 	{ 0x3302b500, "copy_from_user" },
 };
@@ -46,7 +53,7 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "AFDA7EE6539DB3802B6E940");
+MODULE_INFO(srcversion, "78BDC0BE1319F8908A63A24");
 
 static const struct rheldata _rheldata __used
 __attribute__((section(".rheldata"))) = {

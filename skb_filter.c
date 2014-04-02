@@ -1,5 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/netfilter.h>
 #undef __KERNEL__
 #include <linux/netfilter_ipv4.h>
@@ -14,7 +15,10 @@
 #include <linux/list.h>
 #include <net/ip.h>
 #include <asm/uaccess.h>	/* For copy_from_user  */
+#include "base/hash_table.h"
 #include "nl_int.h"
+#include "trx_data.h"
+
 
 struct nf_hook_ops nfho_in;   //net filter hook option struct
 struct nf_hook_ops nfho_out;  //net filter hook option struct
@@ -22,88 +26,104 @@ struct nf_hook_ops nfho_out;  //net filter hook option struct
 
 #define skb_filter_name "skb_filter"
 
-struct c_ip_addr
-{
-   __u32   ip_addr;  // Условный ип адрес ipv6 must be 128 bit
-};
 
-struct filter_rule {
+
+typedef struct filter_rule {
     unsigned char	h_dest[ETH_ALEN];
     unsigned char	h_source[ETH_ALEN];
- 
-/// 
-    struct c_ip_addr d_addr;
-    struct c_ip_addr s_addr;
 
-    __u16 proto;
-    __u16 src_port;
-    __u16 dst_port;
-          
+    struct filter_rule_base base_rule;
     __u8  off;
     struct list_head full_list; /* kernel's list structure */
     struct list_head protocol_list; /* kernel's list structure */
-};
- 
-static struct filter_rule frList;
-static struct filter_rule frList_udp;
-static struct filter_rule frList_tcp;
+    struct hash_entry entry;
+} filter_rule_t;
 
-static  void addRules(void)
+ 
+static struct filter_rule lst_fr;
+static struct filter_rule lst_fr_udp;
+static struct filter_rule lst_fr_tcp;
+struct hash_table map_fr;
+
+static  void add_rules(void)
 {    
     struct filter_rule *a_new_fr, *a_rule; 
     int i;  
     uint8_t rb;
+    
+    hash_table_init(&map_fr, 10, NULL);
 
 /* adding elements to mylist */
     for(i=0; i<20000; ++i){
 	
 	get_random_bytes ( &rb, sizeof (uint8_t) );
         a_new_fr = kmalloc(sizeof(*a_new_fr), GFP_KERNEL);
-        a_new_fr->d_addr.ip_addr = 0;
-        a_new_fr->s_addr.ip_addr = 0;
-        a_new_fr->proto = rb<128?IPPROTO_UDP:IPPROTO_TCP;
-        a_new_fr->src_port = 53 + i;
-	a_new_fr->dst_port = 53 + i;
+        a_new_fr->base_rule.d_addr.addr = 0;
+        a_new_fr->base_rule.s_addr.addr = 0;
+        a_new_fr->base_rule.proto = IPPROTO_UDP;// rb<128?IPPROTO_UDP:IPPROTO_TCP;
+        a_new_fr->base_rule.src_port = 53 + i;
+	a_new_fr->base_rule.dst_port = 53 + i;
 	a_new_fr->off = 0;
         //INIT_LIST_HEAD(&a_new_fr->full_list);
         /* add the new node to mylist */
-        list_add(&(a_new_fr->full_list), &(frList.full_list));//list_add_tail(&(a_new_fr->list), &(frList.list));
-	if(a_new_fr->proto == IPPROTO_UDP)
-		list_add(&(a_new_fr->protocol_list), &(frList_udp.protocol_list));
-	else if (a_new_fr->proto == IPPROTO_TCP)
-		list_add(&(a_new_fr->protocol_list), &(frList_tcp.protocol_list));		
+        list_add(&(a_new_fr->full_list), &(lst_fr.full_list));//list_add_tail(&(a_new_fr->list), &(lst_fr.list));
+	hash_table_insert(&map_fr, &a_new_fr->entry, (const char*)&a_new_fr->base_rule, sizeof(struct filter_rule_base));
+	
+	if(a_new_fr->base_rule.proto == IPPROTO_UDP)
+		list_add(&(a_new_fr->protocol_list), &(lst_fr_udp.protocol_list));
+	else if (a_new_fr->base_rule.proto == IPPROTO_TCP)
+		list_add(&(a_new_fr->protocol_list), &(lst_fr_tcp.protocol_list));		
 	
     }
      
     i =0;
-    list_for_each_entry(a_rule, &frList.full_list, full_list) {
+    list_for_each_entry(a_rule, &lst_fr.full_list, full_list) {
         //access the member from aPerson
-        printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,a_rule->s_addr.ip_addr, a_rule->d_addr.ip_addr, a_rule->proto, a_rule->src_port, a_rule->dst_port);
+        printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,a_rule->base_rule.s_addr.addr, a_rule->base_rule.d_addr.addr, a_rule->base_rule.proto, a_rule->base_rule.src_port, a_rule->base_rule.dst_port);
     
      }
 
 }
 
-static void delRules(void)
+static void del_rules(void)
 { 
     struct filter_rule *a_rule, *tmp;
     printk(KERN_INFO "kernel module unloaded.\n");
     printk(KERN_INFO "deleting the list using list_for_each_entry_safe()\n");
     
-    list_for_each_entry_safe(a_rule, tmp, &frList_udp.protocol_list, protocol_list){
+    list_for_each_entry_safe(a_rule, tmp, &lst_fr_udp.protocol_list, protocol_list){
          list_del(&a_rule->protocol_list);
     }
 
-    list_for_each_entry_safe(a_rule, tmp, &frList_tcp.protocol_list, protocol_list){
+    list_for_each_entry_safe(a_rule, tmp, &lst_fr_tcp.protocol_list, protocol_list){
          list_del(&a_rule->protocol_list);
     }
-   
-    list_for_each_entry_safe(a_rule, tmp, &frList.full_list, full_list){
+
+    hash_table_finit(&map_fr);
+
+    list_for_each_entry_safe(a_rule, tmp, &lst_fr.full_list, full_list){
          // printk(KERN_INFO "freeing node %s\n", a_rule->name);
          list_del(&a_rule->full_list);
          kfree(a_rule);
     }
 }
+
+void find_rule(unsigned char* data)
+{
+    struct hash_entry *hentry;
+	if ((hentry =
+	     hash_table_lookup_key(&map_fr, data,
+				   sizeof(filter_rule_base_t))) == NULL) {
+		printk("Could not find entry for ");
+	} else {
+		/* just like the list_item() */
+		struct filter_rule *tmp;
+		tmp = hash_entry(hentry, struct filter_rule, entry);
+	    	printk("Found data src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",tmp->base_rule.src_port,tmp->base_rule.dst_port,tmp->base_rule.d_addr.addr,tmp->base_rule.s_addr.addr,tmp->base_rule.proto);
+	}
+}
+
+
 
 static struct proc_dir_entry *skb_filter;
  
@@ -138,12 +158,12 @@ unsigned int hook_func(unsigned int hooknum,
             //printk(KERN_INFO "SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d\n",NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest));
 	    struct filter_rule  *a_rule;
 	    
-	   list_for_each_entry(a_rule, &frList_udp.protocol_list, protocol_list) {
+	   list_for_each_entry(a_rule, &lst_fr_udp.protocol_list, protocol_list) {
 		// access the member from aPerson
 		// printk(KERN_INFO "Ip_addr: %X; proto: %d; port: %d\n", a_rule->ia.ip_addr, a_rule->proto, a_rule->port);
-		if((ntohs(udp_header->source) == a_rule->src_port || ntohs(udp_header->dest) == a_rule->dst_port) &&
+		if((ntohs(udp_header->source) == a_rule->base_rule.src_port || ntohs(udp_header->dest) == a_rule->base_rule.dst_port) &&
 		!a_rule->off){
-			printk(KERN_INFO "SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->proto);
+			printk(KERN_INFO "SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->base_rule.proto);
 			return NF_DROP;
 		}
 	    }
@@ -224,12 +244,12 @@ int init_module()
     struct proc_dir_entry proc_root;
     int ret = 0;
     
-    // LIST_HEAD(frList);  // This macro leads to kernel panic on  list_add
-    INIT_LIST_HEAD(&frList.full_list);	
-    INIT_LIST_HEAD(&frList_udp.protocol_list);	
-    INIT_LIST_HEAD(&frList_tcp.protocol_list);
+    // LIST_HEAD(lst_fr);  // This macro leads to kernel panic on  list_add
+    INIT_LIST_HEAD(&lst_fr.full_list);	
+    INIT_LIST_HEAD(&lst_fr_udp.protocol_list);	
+    INIT_LIST_HEAD(&lst_fr_tcp.protocol_list);
 
-    addRules();
+    add_rules();
 	
     skb_filter = create_proc_entry( skb_filter_name, 0644, NULL);
  
@@ -290,7 +310,7 @@ void cleanup_module()
     
     nl_exit();
     
-    delRules();
+    del_rules();
 
     printk(KERN_INFO "Unregistered the SK Parse Module\n");
 }
