@@ -6,9 +6,6 @@
 
 #include "trx_data.h"
 
-#define MY_MSG_TYPE (0x10 + 2)  // + 2 is arbitrary but is the same for kern/usr
-
-
 
 int
 main(int argc, char *argv[])
@@ -57,7 +54,7 @@ main(int argc, char *argv[])
 	msg.id =i;
 
 
-    	ret = nl_send_simple(nls, MY_MSG_TYPE, 0, &msg, sizeof(msg));
+    	ret = nl_send_simple(nls, MSG_ADD_RULE, 0, &msg, sizeof(msg));
 
     	if (ret < 0) {
         	nl_perror(ret, "nl_send_simple");
@@ -76,6 +73,20 @@ main(int argc, char *argv[])
 
     }
 
+    trx_data_t msg;	
+    memset(&msg,0,sizeof(trx_data_t));  
+    ret = nl_send_simple(nls, MSG_ALL_DONE, 0, &msg, sizeof(msg));
+
+    if (ret < 0) {
+        nl_perror(ret, "nl_send_simple");
+        nl_close(nls);
+#ifdef HAVE_LIBNL3
+        nl_socket_free(nls);
+#else
+	nl_handle_destroy(nls);
+#endif
+       	return EXIT_FAILURE;
+    }
     printf("\nTotal sent %d bytes\n", total_cb);
     
 nl_close(nls);

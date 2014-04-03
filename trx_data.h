@@ -25,3 +25,6 @@ typedef struct trx_data{
 
 #pragma pack ()
 
+#define MSG_ADD_RULE (0x10 + 2)  // + 2 is arbitrary. same value for kern/usr
+#define MSG_ALL_DONE (0x10 + 3)
+#define MSG_RULE_ERR (0x10 + 4)

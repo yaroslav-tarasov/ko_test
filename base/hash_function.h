@@ -20,7 +20,7 @@
 //		                      +((const uint8_t *)(d))[0])
 //#endif
 
-uint32_t __hash(const char *data, int len)
+static inline uint32_t __hash(const char *data, int len)
 {
 	uint32_t hash = 0, tmp;
 	int rem;

@@ -236,7 +236,7 @@ static inline void hash_table_finit(struct hash_table *h)
  * @e: &struct hash_entry
  * Description: inserts @e into @h using @e->key as key. not thread-safe.
  */
-void hash_table_insert(struct hash_table *h,
+static inline void hash_table_insert(struct hash_table *h,
 		       struct hash_entry *e,
 		       const unsigned char *key, unsigned int len)
 {
@@ -254,7 +254,7 @@ void hash_table_insert(struct hash_table *h,
  * @len: length of the key
  * Description: inserts @e into @h using @e->key as key. thread-safe.
  */
-void hash_table_insert_safe(struct hash_table *h,
+static inline void hash_table_insert_safe(struct hash_table *h,
 			    struct hash_entry *e,
 			    const unsigned char *key, unsigned int len)
 {
@@ -278,7 +278,7 @@ void hash_table_insert_safe(struct hash_table *h,
  * 		  function is not safe from delections. 
  * 		  function is not thread safe. 
  */
-struct hash_entry *hash_table_lookup_key(const struct hash_table *h,
+static inline struct hash_entry *hash_table_lookup_key(const struct hash_table *h,
 					 const unsigned char *str,
 					 unsigned int len)
 {
@@ -306,7 +306,7 @@ struct hash_entry *hash_table_lookup_key(const struct hash_table *h,
  * 		  function is not safe from delections. 
  * 		  function is not thread safe. 
  */
-struct hash_entry *hash_table_lookup_key_safe(struct hash_table *h,
+static inline struct hash_entry *hash_table_lookup_key_safe(struct hash_table *h,
 					      const unsigned char *str,
 					      unsigned int len)
 {
@@ -353,7 +353,7 @@ static inline struct hash_entry *hash_table_lookup_hash_entry_safe(struct hash_t
 	return (hash_table_lookup_key_safe(h, e->key, e->keylen));
 }
 
-struct hash_entry *hash_table_del_key(struct hash_table *h, const char *str,
+static inline struct hash_entry *hash_table_del_key(struct hash_table *h, const char *str,
 				      unsigned int len)
 {
 	struct hash_entry *e;
@@ -365,7 +365,7 @@ struct hash_entry *hash_table_del_key(struct hash_table *h, const char *str,
 	return e;
 }
 
-struct hash_entry *hash_table_del_key_safe(struct hash_table *h,
+static inline struct hash_entry *hash_table_del_key_safe(struct hash_table *h,
 					   const char *str, unsigned int len)
 {
 	struct hash_entry *e;

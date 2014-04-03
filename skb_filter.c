@@ -65,7 +65,7 @@ static  void add_rules(void)
 	a_new_fr->base_rule.dst_port = 53 + i;
 	a_new_fr->off = 0;
         //INIT_LIST_HEAD(&a_new_fr->full_list);
-        /* add the new node to mylist */
+        // add the new node to mylist 
         list_add(&(a_new_fr->full_list), &(lst_fr.full_list));//list_add_tail(&(a_new_fr->list), &(lst_fr.list));
 	hash_table_insert(&map_fr, &a_new_fr->entry, (const char*)&a_new_fr->base_rule, sizeof(struct filter_rule_base));
 	
@@ -108,18 +108,20 @@ static void del_rules(void)
     }
 }
 
-void find_rule(unsigned char* data)
+int find_rule(unsigned char* data)
 {
     struct hash_entry *hentry;
 	if ((hentry =
 	     hash_table_lookup_key(&map_fr, data,
 				   sizeof(filter_rule_base_t))) == NULL) {
-		printk("Could not find entry for ");
+		// printk("Could not find entry for ");
+	return -1;
 	} else {
 		/* just like the list_item() */
 		struct filter_rule *tmp;
 		tmp = hash_entry(hentry, struct filter_rule, entry);
-	    	printk("Found data src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",tmp->base_rule.src_port,tmp->base_rule.dst_port,tmp->base_rule.d_addr.addr,tmp->base_rule.s_addr.addr,tmp->base_rule.proto);
+	    	// printk("Found data src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",tmp->base_rule.src_port,tmp->base_rule.dst_port,tmp->base_rule.d_addr.addr,tmp->base_rule.s_addr.addr,tmp->base_rule.proto);
+	return 0;	
 	}
 }
 
@@ -163,7 +165,7 @@ unsigned int hook_func(unsigned int hooknum,
 		// printk(KERN_INFO "Ip_addr: %X; proto: %d; port: %d\n", a_rule->ia.ip_addr, a_rule->proto, a_rule->port);
 		if((ntohs(udp_header->source) == a_rule->base_rule.src_port || ntohs(udp_header->dest) == a_rule->base_rule.dst_port) &&
 		!a_rule->off){
-			printk(KERN_INFO "SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->base_rule.proto);
+			printk(KERN_INFO "TID %d SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", (int)current->pid, NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->base_rule.proto);
 			return NF_DROP;
 		}
 	    }

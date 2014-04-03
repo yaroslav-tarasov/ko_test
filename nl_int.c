@@ -3,34 +3,42 @@
 #include <net/sock.h>
 #include <net/netlink.h>
 #include "nl_int.h"
+#include "base/hash_table.h"
 #include "trx_data.h"
 
-#define MY_MSG_TYPE (0x10 + 2)  // + 2 is arbitrary. same value for kern/usr
 
-static struct sock *my_nl_sock;
+static struct sock *_nl_sock;
 
-void find_rule(unsigned char* data);
+int find_rule(unsigned char* data);
 
-DEFINE_MUTEX(my_mutex);
+DEFINE_MUTEX(nl_mutex);
 
 static int
-my_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
+nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
     int type;
     unsigned char *data;
 
 
     type = nlh->nlmsg_type;
-    if (type != MY_MSG_TYPE) {
-        printk("%s: expect %#x got %#x\n", __func__, MY_MSG_TYPE, type);
-        return -EINVAL;
+
+    switch (type)
+    {
+	case MSG_ADD_RULE:
+	        data = NLMSG_DATA(nlh);
+                if(find_rule((unsigned char*)&((trx_data_t*)data)->base_rule)==0)
+			printk("%s we have this rule ",__func__);
+		else
+			printk("%s new rule added ",__func__);
+
+		printk("%s from netlink  TID %d index: %d src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",__func__,(int)current->pid,((trx_data_t*)data)->id,((trx_data_t*)data)->base_rule.src_port,((trx_data_t*)data)->base_rule.dst_port,((trx_data_t*)data)->base_rule.d_addr.addr,((trx_data_t*)data)->base_rule.s_addr.addr,((trx_data_t*)data)->base_rule.proto);
+		break;
+        case MSG_ALL_DONE:
+		break;
+	default:
+		printk("%s: expect something else got %#x\n", __func__, type);
+	        return -EINVAL;
     }
-
-    data = NLMSG_DATA(nlh);
-
-printk("my_rcv_msg from netlink index: %d src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",((trx_data_t*)data)->id,((trx_data_t*)data)->base_rule.src_port,((trx_data_t*)data)->base_rule.dst_port,((trx_data_t*)data)->base_rule.d_addr.addr,((trx_data_t*)data)->base_rule.s_addr.addr,((trx_data_t*)data)->base_rule.proto);
-	
-    find_rule((unsigned char*)&((trx_data_t*)data)->base_rule);
 
 //    printk("%s: %02x %02x %02x %02x %02x %02x %02x %02x\n", __func__,
 //            data[0], data[1], data[2], data[3],
@@ -44,19 +52,19 @@ printk("my_rcv_msg from netlink index: %d src port: %d  dst_port: %d d_addr: %d 
 }
 
 static void
-my_nl_rcv_msg(struct sk_buff *skb)
+nl_skb_rcv_msg(struct sk_buff *skb)
 {
-    mutex_lock(&my_mutex);
-    netlink_rcv_skb(skb, &my_rcv_msg);
-    mutex_unlock(&my_mutex);
+    mutex_lock(&nl_mutex);
+    netlink_rcv_skb(skb, &nl_rcv_msg);
+    mutex_unlock(&nl_mutex);
 }
 
 /*static*/ int
 nl_init(void)
 {
-    my_nl_sock = netlink_kernel_create(&init_net, NETLINK_USERSOCK, 0,
-            my_nl_rcv_msg, NULL, THIS_MODULE);
-    if (!my_nl_sock) {
+    _nl_sock = netlink_kernel_create(&init_net, NETLINK_USERSOCK, 0,
+            nl_skb_rcv_msg, NULL, THIS_MODULE);
+    if (!_nl_sock) {
         printk(KERN_ERR "%s: receive handler registration failed\n", __func__);
         return -ENOMEM;
     }
@@ -67,8 +75,8 @@ nl_init(void)
 /*static*/ void
 nl_exit(void)
 {
-    if (my_nl_sock) {
-        netlink_kernel_release(my_nl_sock);
+    if (_nl_sock) {
+        netlink_kernel_release(_nl_sock);
     }
 }
 
