@@ -1,7 +1,7 @@
 language: c
 
 install:
-  - sudo apt-get install linux-headers-$(uname -r)
+  - sudo apt-get install linux-headers-linux-2.6.32
 
 script:
   - make
