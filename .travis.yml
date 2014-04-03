@@ -1,7 +1,7 @@
 language: c
 
 install:
-  - sudo apt-get install kernel-build-tools
+  - sudo apt-get install linux-headers-(uname -r)
 
 script:
   - make
