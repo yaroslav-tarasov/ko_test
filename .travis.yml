@@ -1,4 +1,7 @@
 language: c
 
+install:
+  - sudo apt-get install kernel-build-tools
+
 script:
   - make
