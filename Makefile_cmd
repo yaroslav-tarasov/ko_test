@@ -15,7 +15,7 @@ TARGET = netlink_cmd
 all: default 
 
 default:    netlink_cmd.c
-	$(CC) netlink_cmd.c -o netlink_cmd  -lnl  
+	$(CC) netlink_cmd.c -o netlink_cmd  -lnl  -I /usr/include/libnl3/
 
 ean:
 	@rm -f *.o .*.cmd .*.flags *.mod.c *.order
