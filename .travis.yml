@@ -1,7 +1,5 @@
 language: c
 
-install:
-  - sudo apt-get search linux-headers-linux
 
 script:
-  - make
+  - make -f Makefile_cmd
