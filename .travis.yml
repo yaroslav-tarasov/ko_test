@@ -1,5 +1,7 @@
 language: c
 
+install:
+  - sudo apt-get install libnl-3-dev 
 
 script:
   - make -f Makefile_cmd
