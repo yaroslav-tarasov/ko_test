@@ -15,7 +15,7 @@ TARGET = netlink_cmd
 all: default 
 
 default:    netlink_cmd.c
-	$(CC) netlink_cmd.c -o netlink_cmd  -lnl  -I /usr/include/libnl3/ -D HAVE_LIBNL3
+	$(CC) netlink_cmd.c -o netlink_cmd  -lnl-3  -I /usr/include/libnl3/ -D HAVE_LIBNL3
 
 clean:
 	@rm -f *.o  .*.flags *.order
