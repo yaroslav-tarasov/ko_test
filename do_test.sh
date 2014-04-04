@@ -1,9 +1,9 @@
 #!/bin/bash
 
 make && {
-rmmod skb_filter_ko
-insmod skb_filter_ko.ko 
+rmmod bf_filter
+insmod bf_filter.ko 
 #lsmod 
-dmesg
+#dmesg
 }
 

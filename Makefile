@@ -11,8 +11,10 @@ KDIR = /lib/modules/$(CURRENT)/build
 PWD = $(shell pwd)
 DEST = /lib/modules/$(CURRENT)/misc
 #EXTRA_CFLAGS += -O3 -std=gnu99 --no-warnings
+CMD_SRC = netlink_cmd.c 
+CMD_OBJ = $(patsubst %.c,obj/%.o,$(CMD_SRC)) 
 
-TARGET = skb_filter_ko
+TARGET = bf_filter
 OBJS = skb_filter.o nl_int.o 
 
 obj-m := $(TARGET).o 
@@ -26,8 +28,9 @@ default:
 $(TARGET).o: $(OBJS)
 	$(LD) -r -o $@ $(OBJS)
 
-cmd:    netlink_cmd.c
-	$(CC) netlink_cmd.c -o netlink_cmd  -lnl  
+
+cmd:    $(CMD_SRC)
+	$(CC) $(CMD_SRC) -o netlink_cmd  -lnl  -g
 
 
 clean:

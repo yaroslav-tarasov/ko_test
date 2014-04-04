@@ -15,16 +15,20 @@ typedef struct filter_rule_base {
     __u16 dst_port;
 } filter_rule_base_t;
 
-typedef struct trx_data{
+typedef struct filter_rule{
     unsigned char	h_dest[ETH_ALEN];
     unsigned char	h_source[ETH_ALEN];
    filter_rule_base_t base_rule;
    __u8  off;	    
+   __u8  direction;
+   __u8  policy; 
    __u32 id;	
-} trx_data_t; 
+} filter_rule_t;
 
 #pragma pack ()
 
-#define MSG_ADD_RULE (0x10 + 2)  // + 2 is arbitrary. same value for kern/usr
-#define MSG_ALL_DONE (0x10 + 3)
-#define MSG_RULE_ERR (0x10 + 4)
+enum {POLICY_DROP,POLICY_ACCEPT};
+enum {IPPROTO_NOTEXIST=65000};
+enum {MSG_ADD_RULE=0x10 + 2,MSG_ALL_DONE,MSG_RULE_ERR,MSG_DELETE_RULE ,MSG_DELETE_ALL_RULES,MSG_UPDATE_RULE,MSG_GET_RULES};
+
+ 

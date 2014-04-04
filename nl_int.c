@@ -10,6 +10,7 @@
 static struct sock *_nl_sock;
 
 int find_rule(unsigned char* data);
+void add_rule(struct filter_rule* fr);
 
 DEFINE_MUTEX(nl_mutex);
 
@@ -19,19 +20,23 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
     int type;
     unsigned char *data;
 
-
     type = nlh->nlmsg_type;
 
     switch (type)
     {
 	case MSG_ADD_RULE:
 	        data = NLMSG_DATA(nlh);
-                if(find_rule((unsigned char*)&((trx_data_t*)data)->base_rule)==0)
+                if(find_rule((unsigned char*)&((filter_rule_t*)data)->base_rule)==0)
 			printk("%s we have this rule ",__func__);
-		else
+		else{
 			printk("%s new rule added ",__func__);
-
-		printk("%s from netlink  TID %d index: %d src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",__func__,(int)current->pid,((trx_data_t*)data)->id,((trx_data_t*)data)->base_rule.src_port,((trx_data_t*)data)->base_rule.dst_port,((trx_data_t*)data)->base_rule.d_addr.addr,((trx_data_t*)data)->base_rule.s_addr.addr,((trx_data_t*)data)->base_rule.proto);
+			add_rule((filter_rule_t*)data);
+		}
+		printk("%s from netlink  TID %d index: %d src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",__func__,(int)current->pid,((filter_rule_t*)data)->id,((filter_rule_t*)data)->base_rule.src_port,((filter_rule_t*)data)->base_rule.dst_port,((filter_rule_t*)data)->base_rule.d_addr.addr,((filter_rule_t*)data)->base_rule.s_addr.addr,((filter_rule_t*)data)->base_rule.proto);
+		break;
+        case MSG_DELETE_RULE:
+		break;
+        case MSG_GET_RULES:
 		break;
         case MSG_ALL_DONE:
 		break;
