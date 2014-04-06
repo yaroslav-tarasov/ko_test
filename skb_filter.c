@@ -23,7 +23,7 @@
 struct nf_hook_ops nfho_in;   //net filter hook option struct
 struct nf_hook_ops nfho_out;  //net filter hook option struct
 
-DEFINE_MUTEX(list_mutex);	
+DEFINE_SPINLOCK(list_mutex);	
 
 #define skb_filter_name "skb_filter"
 
@@ -143,14 +143,14 @@ void add_rule(struct filter_rule* fr)
 	a_new_fr = kmalloc(sizeof(*a_new_fr), GFP_KERNEL);	
 	memcpy(&a_new_fr->fr,fr,sizeof(filter_rule_t));
 
-mutex_lock(&list_mutex);
+spin_lock(&list_mutex);
         list_add(&(a_new_fr->full_list), &(lst_fr.full_list));//list_add_tail(&(a_new_fr->list), &(lst_fr.list));
 	hash_table_insert(&map_fr, &a_new_fr->entry, (const char*)&a_new_fr->fr.base_rule, sizeof(struct filter_rule_base));
 	if(a_new_fr->fr.base_rule.proto == IPPROTO_UDP)
 		list_add(&(a_new_fr->protocol_list), &(lst_fr_udp.protocol_list));
 	else if (a_new_fr->fr.base_rule.proto == IPPROTO_TCP)
 		list_add(&(a_new_fr->protocol_list), &(lst_fr_tcp.protocol_list));
-mutex_unlock(&list_mutex);	
+spin_unlock(&list_mutex);	
 	
 }
 
@@ -163,7 +163,7 @@ void delete_rule(struct filter_rule* fr)
 {
 	struct filter_rule_list *a_rule, *tmp;
 
-mutex_lock(&list_mutex);
+spin_lock(&list_mutex);
 	list_for_each_entry_safe(a_rule, tmp, &lst_fr_udp.protocol_list, protocol_list){
 		if(cmp_rule(&a_rule->fr,fr))
 		{		
@@ -188,7 +188,7 @@ mutex_lock(&list_mutex);
 			kfree(a_rule);
 		}
 	}
-mutex_unlock(&list_mutex);	
+spin_unlock(&list_mutex);	
 	
 }
 
@@ -255,7 +255,7 @@ unsigned int hook_func(unsigned int hooknum,
         udp_header = (struct udphdr *)(skb_transport_header(sock_buff) + ip_hdrlen(sock_buff));
         if(udp_header){
 	    struct filter_rule_list  *a_rule;
-mutex_lock(&list_mutex);   
+//spin_lock(&list_mutex);   
 	   list_for_each_entry(a_rule, &lst_fr_udp.protocol_list, protocol_list) {
 		if((ntohs(udp_header->source) == a_rule->fr.base_rule.src_port || ntohs(udp_header->dest) == a_rule->fr.base_rule.dst_port) &&
 		!a_rule->fr.off){
@@ -265,7 +265,7 @@ mutex_lock(&list_mutex);
 			return NF_DROP;
 		}
 	    }
-mutex_unlock(&list_mutex);
+//spin_unlock(&list_mutex);
 
         }else
             return NF_DROP;
@@ -348,6 +348,8 @@ int init_module()
     INIT_LIST_HEAD(&lst_fr_udp.protocol_list);	
     INIT_LIST_HEAD(&lst_fr_tcp.protocol_list);
 
+    // mutex_init(&list_mutex);
+
     init_rules();
 	
     skb_filter = create_proc_entry( skb_filter_name, 0644, NULL);
@@ -378,7 +380,7 @@ int init_module()
 #if (LINUX_VERSION_CODE >= 0x020500)     nfho_out.owner = THIS_MODULE;
 #endif
 
-    nf_register_hook(&nfho_out);
+    // nf_register_hook(&nfho_out);
  
     nfho_in.hook = hook_func;
     nfho_in.hooknum = NF_INET_PRE_ROUTING;
@@ -392,7 +394,7 @@ int init_module()
     nf_register_hook(&nfho_in);
 
     printk(KERN_INFO "Registering SK Parse Module\n");
-    
+    //
     nl_init();
 
 error:
@@ -402,7 +404,7 @@ error:
 void cleanup_module()
 {
     nf_unregister_hook(&nfho_in);
-    nf_unregister_hook(&nfho_out);
+    //nf_unregister_hook(&nfho_out);
 
     if ( skb_filter )
         remove_proc_entry(skb_filter_name, NULL);
@@ -410,7 +412,9 @@ void cleanup_module()
     nl_exit();
     
     del_rules();
-
+    
+    //mutex_destroy(&list_mutex);
+    
     printk(KERN_INFO "Unregistered the SK Parse Module\n");
 }
  
