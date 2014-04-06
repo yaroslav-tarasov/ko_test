@@ -5,6 +5,7 @@
 #include <netinet/ip.h> 
 #include <linux/if_ether.h>
 #include <netlink/netlink.h>
+//#include <netlink/version.h>
 
 #include "trx_data.h"
 
@@ -262,15 +263,6 @@ main(int argc, char *argv[])
 {
 
 
-/*    if (action == ACT_NEW_RULE) {
-        send_rule_to_proc();
-    } else if (action == ACT_PRINT_RULES) {
-        print_rule();
-    } else if (action == ACT_DEL_RULE) {
-        send_delete_to_proc();
-    }*/
-
-
 #ifdef HAVE_LIBNL3
 	struct nl_sock *nls;
 #else
@@ -280,9 +272,6 @@ main(int argc, char *argv[])
     memset(&fr,0,sizeof(filter_rule_t));
 
     int action = parse_cmd_args(argc, argv,&fr);
-    
-
- 
 
     int ret=0;
 #ifdef HAVE_LIBNL3
@@ -313,18 +302,6 @@ main(int argc, char *argv[])
 	printf("Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", fr.base_rule.s_addr.addr, fr.base_rule.d_addr.addr, fr.base_rule.proto, fr.base_rule.src_port, fr.base_rule.dst_port);
 
 
-    //int i=0;
-    //int total_cb =0;
-    printf("Begin send \n");
-    //for (;i<20000;i++){
-    //	filter_rule_t msg;	
-    //	memset(&msg,0,sizeof(filter_rule_t));
-    // 	msg.base_rule.proto = IPPROTO_UDP;
-    //	msg.base_rule.src_port = 542;
-    //	msg.base_rule.dst_port = 542;
-    //	msg.id =i;
-
-
     	ret = nl_send_simple(nls, MSG_ADD_RULE, 0, &fr, sizeof(fr));
 
     	if (ret < 0) {
@@ -344,18 +321,90 @@ main(int argc, char *argv[])
 		//total_cb += ret;
     	}
 
-    //}
+
     } else if (action == CMD_PRINT_RULES) {
         printf("CMD_PRINT_RULES\n");
+
+    	ret = nl_send_simple(nls, MSG_GET_RULES, 0, &fr, sizeof(fr));
+
+    	if (ret < 0) {
+#ifdef HAVE_LIBNL3
+        	nl_perror(ret, "nl_send_simple");
+        	nl_close(nls);
+        	nl_socket_free(nls);
+#else
+        	nl_perror("nl_send_simple");
+        	nl_close(nls);
+		nl_handle_destroy(nls);
+#endif
+        	return EXIT_FAILURE;
+    	} else {
+        	//printf("sent %d bytes\n", ret);
+		printf(".");		
+		//total_cb += ret;
+    	}
+
+	
+	struct sockaddr_nl peer;
+ 	unsigned char *nl_msg;
+	unsigned char *msg;
+	struct ucred *creds;
+// 	int ret = nl_recv(nls, &peer, &nl_msg,&creds);
+
+	int msgn,n;
+	//unsigned char *buf; 
+	struct nlmsghdr *hdr;
+
+        printf("List of rules:\n");
+	do{
+		msgn = n = nl_recv(nls, NULL, &nl_msg,&creds);
+		hdr = (struct nlmsghdr *) nl_msg;
+
+	while (nlmsg_ok(hdr, n)) {
+	         msg = NLMSG_DATA((struct nlmsghdr *)nl_msg);
+		 // printf("hdr->nlmsg_type: %d \n",hdr->nlmsg_type);
+		 if(hdr->nlmsg_type==MSG_DONE) break;
+
+	         printf("# %d src port: %d  dst port: %d d_addr: %d s_addr: %d proto: %d\n",
+			((filter_rule_t*)msg)->id,((filter_rule_t*)msg)->base_rule.src_port,
+			((filter_rule_t*)msg)->base_rule.dst_port,((filter_rule_t*)msg)->base_rule.d_addr.addr,
+			((filter_rule_t*)msg)->base_rule.s_addr.addr,((filter_rule_t*)msg)->base_rule.proto);
+	        hdr = nlmsg_next(hdr, &n);
+	}
+
+	}while(hdr->nlmsg_type!=MSG_DONE && msgn>0);
+
+  
+
+
     } else if (action == CMD_DEL_RULE) {
         printf("CMD_DEL_RULE\n");
+
+    	ret = nl_send_simple(nls, MSG_DELETE_RULE, 0, &fr, sizeof(fr));
+
+    	if (ret < 0) {
+#ifdef HAVE_LIBNL3
+        	nl_perror(ret, "nl_send_simple");
+        	nl_close(nls);
+        	nl_socket_free(nls);
+#else
+        	nl_perror("nl_send_simple");
+        	nl_close(nls);
+		nl_handle_destroy(nls);
+#endif
+        	return EXIT_FAILURE;
+    	} else {
+        	//printf("sent %d bytes\n", ret);
+		printf(".");		
+		//total_cb += ret;
+    	}
     } else if (action == CMD_PRINT_HELP) {
 	exit_printhelp();
     } 
 
     filter_rule_t msg;	
     memset(&msg,0,sizeof(filter_rule_t));  
-    ret = nl_send_simple(nls, MSG_ALL_DONE, 0, &msg, sizeof(msg));
+    ret = nl_send_simple(nls, MSG_DONE, 0, &msg, sizeof(msg));
 
     if (ret < 0) {
 #ifdef HAVE_LIBNL3

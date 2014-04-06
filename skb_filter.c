@@ -23,10 +23,11 @@
 struct nf_hook_ops nfho_in;   //net filter hook option struct
 struct nf_hook_ops nfho_out;  //net filter hook option struct
 
+DEFINE_MUTEX(list_mutex);	
 
 #define skb_filter_name "skb_filter"
 
-
+void nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_size);
 
 typedef struct filter_rule_list {
     
@@ -107,7 +108,6 @@ static  void init_rules(void)
      
     i =0;
     list_for_each_entry(a_rule, &lst_fr.full_list, full_list) {
-        //access the member from aPerson
         printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
     
      }
@@ -142,11 +142,67 @@ void add_rule(struct filter_rule* fr)
 	struct filter_rule_list *a_new_fr;
 	a_new_fr = kmalloc(sizeof(*a_new_fr), GFP_KERNEL);	
 	memcpy(&a_new_fr->fr,fr,sizeof(filter_rule_t));
+
+mutex_lock(&list_mutex);
+        list_add(&(a_new_fr->full_list), &(lst_fr.full_list));//list_add_tail(&(a_new_fr->list), &(lst_fr.list));
+	hash_table_insert(&map_fr, &a_new_fr->entry, (const char*)&a_new_fr->fr.base_rule, sizeof(struct filter_rule_base));
 	if(a_new_fr->fr.base_rule.proto == IPPROTO_UDP)
 		list_add(&(a_new_fr->protocol_list), &(lst_fr_udp.protocol_list));
 	else if (a_new_fr->fr.base_rule.proto == IPPROTO_TCP)
-		list_add(&(a_new_fr->protocol_list), &(lst_fr_tcp.protocol_list));	
+		list_add(&(a_new_fr->protocol_list), &(lst_fr_tcp.protocol_list));
+mutex_unlock(&list_mutex);	
 	
+}
+
+inline int cmp_rule(struct filter_rule* fr1,struct filter_rule* fr2)
+{
+	return memcmp(fr1,fr2,sizeof(struct filter_rule));
+}
+
+void delete_rule(struct filter_rule* fr)
+{
+	struct filter_rule_list *a_rule, *tmp;
+
+mutex_lock(&list_mutex);
+	list_for_each_entry_safe(a_rule, tmp, &lst_fr_udp.protocol_list, protocol_list){
+		if(cmp_rule(&a_rule->fr,fr))
+		{		
+			list_del(&a_rule->protocol_list);
+			break;
+		}
+	}
+
+	list_for_each_entry_safe(a_rule, tmp, &lst_fr_tcp.protocol_list, protocol_list){
+		if(cmp_rule(&a_rule->fr,fr))
+		{		
+			list_del(&a_rule->protocol_list);
+			break;
+		}
+	}
+
+	hash_table_del_key_safe(&map_fr,(const char*)&fr->base_rule, sizeof(struct filter_rule_base));
+	
+	list_for_each_entry_safe(a_rule, tmp, &lst_fr.full_list, full_list){
+		if(cmp_rule(&a_rule->fr,fr)){		
+			list_del(&a_rule->full_list);
+			kfree(a_rule);
+		}
+	}
+mutex_unlock(&list_mutex);	
+	
+}
+
+void list_rules(struct sock * nl_sk,struct sk_buff *skb)
+{
+    struct filter_rule_list *a_rule; 
+    int i=0; 
+    list_for_each_entry(a_rule, &lst_fr.full_list, full_list) {
+  printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
+	a_rule->fr.id = i; 	
+	nl_send_msg(nl_sk,skb, MSG_DATA, (char*)&a_rule->fr,sizeof(a_rule->fr));
+    }
+    
+    nl_send_msg(nl_sk,skb, MSG_DONE, (char*)&a_rule->fr,sizeof(a_rule->fr));
 }
 
 int find_rule(unsigned char* data)
@@ -158,7 +214,7 @@ int find_rule(unsigned char* data)
 		// printk("Could not find entry for ");
 	return -1;
 	} else {
-		/* just like the list_item() */
+		/* just like the listr_item() */
 		struct filter_rule_list *tmp;
 		tmp = hash_entry(hentry, struct filter_rule_list, entry);
 	    	// printk("Found data src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",tmp->fr.base_rule.src_port,tmp->fr.base_rule.dst_port,tmp->fr.base_rule.d_addr.addr,tmp->fr.base_rule.s_addr.addr,tmp->fr.base_rule.proto);
@@ -198,18 +254,18 @@ unsigned int hook_func(unsigned int hooknum,
     if(ip_header->protocol == IPPROTO_UDP){
         udp_header = (struct udphdr *)(skb_transport_header(sock_buff) + ip_hdrlen(sock_buff));
         if(udp_header){
-            //printk(KERN_INFO "SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d\n",NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest));
 	    struct filter_rule_list  *a_rule;
-	    
+mutex_lock(&list_mutex);   
 	   list_for_each_entry(a_rule, &lst_fr_udp.protocol_list, protocol_list) {
-		// access the member from aPerson
-		// printk(KERN_INFO "Ip_addr: %X; proto: %d; port: %d\n", a_rule->ia.ip_addr, a_rule->proto, a_rule->port);
 		if((ntohs(udp_header->source) == a_rule->fr.base_rule.src_port || ntohs(udp_header->dest) == a_rule->fr.base_rule.dst_port) &&
 		!a_rule->fr.off){
-			printk(KERN_INFO "TID %d SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", (int)current->pid, NIPQUAD(ip_header->saddr),ntohs(udp_header->source),NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->fr.base_rule.proto);
+			printk(KERN_INFO "TID %d SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", 
+				(int)current->pid, NIPQUAD(ip_header->saddr),ntohs(udp_header->source),
+				NIPQUAD(ip_header->daddr),ntohs(udp_header->dest), a_rule->fr.base_rule.proto);
 			return NF_DROP;
 		}
 	    }
+mutex_unlock(&list_mutex);
 
         }else
             return NF_DROP;
