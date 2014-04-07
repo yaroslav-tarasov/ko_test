@@ -36,7 +36,7 @@ thread( void * data ) {
 	//kfree((tp_t*)data);
 	struct task_struct *curr = current; /* current - указатель на дескриптор текущей задачи */
         
-	daemonize("Bye_Server_z");
+	daemonize("thread");
         //allow_signal(SIGKILL);
 	
 	list_rules(_nl_sock,skb);
@@ -92,10 +92,10 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		//((filter_rule_t*)data)->base_rule.src_port=1200;
 		// memset(data,1,sizeof(filter_rule_t));	
 		// nl_send_msg(_nl_sock,skb,data,sizeof(filter_rule_t));
-		list_rules(_nl_sock,skb);
+		//list_rules(_nl_sock,skb);
                 thrd_params.nl_sk = _nl_sock;
 		thrd_params.skb = skb;
-		// /*hello_thread_id =*/ kernel_thread(thread, &thrd_params, CLONE_FS | CLONE_FILES | CLONE_SIGHAND | SIGCHLD | CLONE_KERNEL);
+		 /*hello_thread_id =*/ kernel_thread(thread, &thrd_params, CLONE_FS | CLONE_FILES | CLONE_SIGHAND | SIGCHLD | CLONE_KERNEL);
 		// printk("%s: nl_send_msg %d\n", __func__, sizeof(filter_rule_t));
 		break;
         case MSG_DONE:
