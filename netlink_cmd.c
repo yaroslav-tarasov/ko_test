@@ -377,6 +377,25 @@ main(int argc, char *argv[])
 			((filter_rule_t*)msg)->base_rule.s_addr.addr,((filter_rule_t*)msg)->base_rule.proto);
 
 	        hdr = nlmsg_next(hdr, &n);
+
+		if(hdr->nlmsg_flags&NLM_F_ACK){
+		    filter_rule_t msg;	
+		    memset(&msg,0,sizeof(filter_rule_t));  
+		    ret = nl_send_simple(nls, NLMSG_ERROR, 0, &msg, sizeof(msg));
+
+		    if (ret < 0) {
+		#ifdef HAVE_LIBNL3
+			nl_perror(ret, "nl_send_simple");
+			nl_close(nls);
+			nl_socket_free(nls);
+		#else
+			nl_perror( "nl_send_simple");
+			nl_close(nls);
+			nl_handle_destroy(nls);
+		#endif
+		       	return EXIT_FAILURE;
+		    }
+		}
 	}
 
 	}while(hdr->nlmsg_type!=NLMSG_ERROR && hdr->nlmsg_type!=MSG_DONE && msgn>0);

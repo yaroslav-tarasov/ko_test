@@ -28,6 +28,7 @@ DEFINE_SPINLOCK(list_mutex);
 #define skb_filter_name "skb_filter"
 
 void nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_size);
+void wfc(void);
 
 typedef struct filter_rule_list {
     
@@ -200,6 +201,8 @@ void list_rules(struct sock * nl_sk,struct sk_buff *skb)
 	printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,
 			a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, 
 			a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
+
+	if(i%20==0) wfc();
 
 	a_rule->fr.id = i; 	
 	nl_send_msg(nl_sk,skb, MSG_DATA, (char*)&a_rule->fr,sizeof(a_rule->fr));

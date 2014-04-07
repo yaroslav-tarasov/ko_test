@@ -26,7 +26,10 @@ typedef struct thrd_params{
 
 tp_t thrd_params;
 
-static int thread( void * data ) {
+struct completion comp;
+
+static int 
+thread( void * data ) {
 	//struct sock * _nl_sock = ((tp_t*)data)->nl_sk;
 	struct sk_buff *skb = ((tp_t*)data)->skb;
 	
@@ -41,12 +44,18 @@ static int thread( void * data ) {
 	return 0;
 }
 
+void 
+wfc(void){
+	wait_for_completion(&comp);
+}
+
 static int
 nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
     int type;
     unsigned char *data;
-
+    struct nlmsgerr *nlerr;
+    
     type = nlh->nlmsg_type;
 
     switch (type)
@@ -92,6 +101,12 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
         case MSG_DONE:
  		//s_rules_counter = 0;
 		break;
+        case NLMSG_ERROR:
+
+		nlerr = (struct nlmsgerr*)NLMSG_DATA(nlh);
+		//printf("Got some error: %d \n",nlerr->error);
+		complete(&comp);
+	
 	default:
 		printk("%s: expect something else got %#x\n", __func__, type);
 	        return -EINVAL;
@@ -141,7 +156,7 @@ nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_
         printk(KERN_ERR "Failed to allocate new skb\n");
         return -1;
     } 
-    nlh=nlmsg_put(skb_out,0,0,/*NLMSG_DONE*/type,msg_size,0);
+    nlh=nlmsg_put(skb_out,0,0,/*NLMSG_DONE*/type,msg_size,NLM_F_ACK);
 
     NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
     memcpy(nlmsg_data(nlh),msg,msg_size);
@@ -168,7 +183,8 @@ nl_init(void)
         printk(KERN_ERR "%s: receive handler registration failed\n", __func__);
         return -ENOMEM;
     }
-
+    
+    init_completion(&comp);
     return 0;
 }
 
