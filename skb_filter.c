@@ -197,7 +197,10 @@ void list_rules(struct sock * nl_sk,struct sk_buff *skb)
     struct filter_rule_list *a_rule; 
     int i=0; 
     list_for_each_entry(a_rule, &lst_fr.full_list, full_list) {
-  printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
+	printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,
+			a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, 
+			a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
+
 	a_rule->fr.id = i; 	
 	nl_send_msg(nl_sk,skb, MSG_DATA, (char*)&a_rule->fr,sizeof(a_rule->fr));
     }
@@ -256,6 +259,7 @@ unsigned int hook_func(unsigned int hooknum,
         if(udp_header){
 	    struct filter_rule_list  *a_rule;
 //spin_lock(&list_mutex);   
+#if 0
 	   list_for_each_entry(a_rule, &lst_fr_udp.protocol_list, protocol_list) {
 		if((ntohs(udp_header->source) == a_rule->fr.base_rule.src_port || ntohs(udp_header->dest) == a_rule->fr.base_rule.dst_port) &&
 		!a_rule->fr.off){
@@ -265,6 +269,7 @@ unsigned int hook_func(unsigned int hooknum,
 			return NF_DROP;
 		}
 	    }
+#endif
 //spin_unlock(&list_mutex);
 
         }else
@@ -335,14 +340,14 @@ int skb_write(struct file *file, const char *buffer, unsigned long len,
     filter_value = simple_strtol(&userData, NULL, 10);
  
     return len;
-}
+} 
  
 int init_module()
 {   
 
     struct proc_dir_entry proc_root;
     int ret = 0;
-    
+    //daemonize("Hello_Server_z");
     // LIST_HEAD(lst_fr);  // This macro leads to kernel panic on  list_add
     INIT_LIST_HEAD(&lst_fr.full_list);	
     INIT_LIST_HEAD(&lst_fr_udp.protocol_list);	

@@ -35,6 +35,7 @@ get_direction(char* dir) {
     }
 }
  
+
 int 
 get_policy(char* policy) {
     if (strcmp(policy, "DROP") == 0) {
@@ -360,21 +361,38 @@ main(int argc, char *argv[])
 		msgn = n = nl_recv(nls, NULL, &nl_msg,&creds);
 		hdr = (struct nlmsghdr *) nl_msg;
 
+		if(n<0) printf("nl_recv err= %d\n", n);
+
 	while (nlmsg_ok(hdr, n)) {
 	         msg = NLMSG_DATA((struct nlmsghdr *)nl_msg);
 		 // printf("hdr->nlmsg_type: %d \n",hdr->nlmsg_type);
-		 if(hdr->nlmsg_type==MSG_DONE) break;
+		 if(hdr->nlmsg_type==NLMSG_ERROR || hdr->nlmsg_type==MSG_DONE) break;
+		
+		 // if(hdr->nlmsg_type==MSG_DATA)
+		printf("hdr->nlmsg_type: %d nlmsg_len: %d nlmsg_flags : %d nlmsg_seq : %d nlmsg_pid : %d \n",hdr->nlmsg_type,hdr->nlmsg_len,hdr->nlmsg_flags,hdr->nlmsg_seq,hdr->nlmsg_pid);
 
-	         printf("# %d src port: %d  dst port: %d d_addr: %d s_addr: %d proto: %d\n",
+	        printf("# %d src port: %d  dst port: %d d_addr: %d s_addr: %d proto: %d\n",
 			((filter_rule_t*)msg)->id,((filter_rule_t*)msg)->base_rule.src_port,
 			((filter_rule_t*)msg)->base_rule.dst_port,((filter_rule_t*)msg)->base_rule.d_addr.addr,
 			((filter_rule_t*)msg)->base_rule.s_addr.addr,((filter_rule_t*)msg)->base_rule.proto);
+
 	        hdr = nlmsg_next(hdr, &n);
 	}
 
-	}while(hdr->nlmsg_type!=MSG_DONE && msgn>0);
+	}while(hdr->nlmsg_type!=NLMSG_ERROR && hdr->nlmsg_type!=MSG_DONE && msgn>0);
 
-  
+	msgn = n = nl_recv(nls, NULL, &nl_msg,&creds);
+	hdr = (struct nlmsghdr *) nl_msg;
+	printf("hdr->nlmsg_type: %d nlmsg_len: %d nlmsg_flags : %d nlmsg_seq : %d nlmsg_pid : %d \n",hdr->nlmsg_type,hdr->nlmsg_len,hdr->nlmsg_flags,hdr->nlmsg_seq,hdr->nlmsg_pid);
+
+	if(hdr->nlmsg_type==NLMSG_ERROR)
+	{	
+		struct nlmsgerr *nlerr;
+		nlerr = (struct nlmsgerr*)NLMSG_DATA((struct nlmsghdr *)nl_msg);
+		printf("Got some error: %d \n",nlerr->error);
+	}
+
+	
 
 
     } else if (action == CMD_DEL_RULE) {
