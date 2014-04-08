@@ -236,7 +236,7 @@ int find_rule(unsigned char* data)
 
 static struct proc_dir_entry *skb_filter;
  
-static int filter_value = 0;
+static int filter_value = 1;
  
 unsigned int hook_func(unsigned int hooknum, 
             struct sk_buff *skb, 
@@ -256,7 +256,7 @@ unsigned int hook_func(unsigned int hooknum,
     ethheader = (struct ethhdr*) skb_mac_header(sock_buff); 
     ip_header = (struct iphdr *) skb_network_header(sock_buff);
  
-    if(!sock_buff || !ip_header || !ethheader || filter_value>0)
+    if(!sock_buff || !ip_header || !ethheader || filter_value==0)
         return NF_ACCEPT;
 
 
@@ -318,7 +318,7 @@ unsigned int hook_func(unsigned int hooknum,
             return NF_DROP;	
     }
  
-    return filter_value == 0 ? NF_ACCEPT : NF_DROP;
+    return filter_value != 0 ? NF_ACCEPT : NF_DROP;
 }
  
 int skb_read(char *page, char **start, off_t off,
