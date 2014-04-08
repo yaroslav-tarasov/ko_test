@@ -166,7 +166,8 @@ nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_
     if(res<0)
     {	
         printk(KERN_INFO "Error while sending message to user err=%d msg_size=%d pid=%d\n",res,msg_size,pid);
- 	kfree_skb(skb_out);
+ 	// kfree_skb(skb_out); Видимо только тогда когда не вызывается unicast вообще и наверное тогда
+ 	// nlmsg_free(skb_out);
     }
 
    // nla_put_u8(skb_out, 8, 9);
