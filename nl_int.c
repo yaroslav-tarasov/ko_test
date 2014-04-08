@@ -12,16 +12,16 @@ static struct sock *_nl_sock;
 int find_rule(unsigned char* data);
 void add_rule(struct filter_rule* fr);
 void delete_rule(struct filter_rule* fr);
-int nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_size);
-void list_rules(struct sock * nl_sk,struct sk_buff *skb);
+int nl_send_msg(struct sock * nl_sk,int destpid, int type, int flags,char* msg,int msg_size);
+void list_rules(struct sock * nl_sk,int destpid);
 
 DEFINE_MUTEX(nl_mutex);
 
 static int s_rules_counter = 0;  
 
 typedef struct thrd_params{
-	struct sock * nl_sk;
-	struct sk_buff *skb;
+	// struct sock * nl_sk;
+	int pid;
 } tp_t;
 
 tp_t thrd_params;
@@ -30,23 +30,25 @@ struct completion comp;
 
 static int 
 thread( void * data ) {
-	//struct sock * _nl_sock = ((tp_t*)data)->nl_sk;
-	struct sk_buff *skb = ((tp_t*)data)->skb;
-	
-	//kfree((tp_t*)data);
-	struct task_struct *curr = current; /* current - указатель на дескриптор текущей задачи */
+	int pid = ((tp_t*)data)->pid;
+
+	// struct task_struct *curr = current; /* current - указатель на дескриптор текущей задачи */
         
 	daemonize("thread");
-        //allow_signal(SIGKILL);
+        // allow_signal(SIGKILL);
 	
-	list_rules(_nl_sock,skb);
-	
+	list_rules(_nl_sock,pid);
+
+    	printk(KERN_INFO "%s skb->pid: %d\n",__func__,pid);
+    	
+	printk(KERN_INFO "Leave %s \n",__func__);
 	return 0;
 }
 
 void 
 wfc(void){
-	wait_for_completion(&comp);
+	wait_for_completion_timeout(&comp,1 * HZ);
+	// wait_for_completion(&comp);
 }
 
 static int
@@ -57,7 +59,9 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
     struct nlmsgerr *nlerr;
     
     type = nlh->nlmsg_type;
-
+    
+    printk("%s nlh->nlmsg_type = %d ",__func__,type);
+    
     switch (type)
     {
 	case MSG_ADD_RULE:
@@ -78,35 +82,50 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		printk("%s index: %d ",	__func__,s_rules_counter);	
 		break;
         case MSG_DELETE_RULE:
+		printk("%s  --------------MSG_DELETE_RULE\n",__func__);
 	        data = NLMSG_DATA(nlh);
-                if(find_rule((unsigned char*)&((filter_rule_t*)data)->base_rule)==0)
-			printk("%s we have this rule ",__func__);
-		else{
-			printk("%s new rule added ",__func__);
+                if(find_rule((unsigned char*)&((filter_rule_t*)data)->base_rule)==0){
+			printk("%s delete rule ",__func__);
 			delete_rule((filter_rule_t*)data);
+		}
+		else{
+			printk("%s we don't have this rule ",__func__);
+			
 		}
 
 		break;
         case MSG_GET_RULES: 
+		printk("%s  --------------MSG_GET_RULES\n",__func__);
 		data = NLMSG_DATA(nlh);
 		//((filter_rule_t*)data)->base_rule.src_port=1200;
 		// memset(data,1,sizeof(filter_rule_t));	
 		// nl_send_msg(_nl_sock,skb,data,sizeof(filter_rule_t));
 		//list_rules(_nl_sock,skb);
-                thrd_params.nl_sk = _nl_sock;
-		thrd_params.skb = skb;
+		printk(KERN_INFO "%s skb->pid: %d\n",__func__,nlh->nlmsg_pid);
+                // thrd_params.nl_sk = _nl_sock;
+		thrd_params.pid = nlh->nlmsg_pid;
 		 /*hello_thread_id =*/ kernel_thread(thread, &thrd_params, CLONE_FS | CLONE_FILES | CLONE_SIGHAND | SIGCHLD | CLONE_KERNEL);
 		// printk("%s: nl_send_msg %d\n", __func__, sizeof(filter_rule_t));
 		break;
         case MSG_DONE:
+		printk("%s  --------------MSG_DONE\n",__func__);
  		//s_rules_counter = 0;
 		break;
+        case MSG_OK:
+		printk("%s  --------------MSG_OK\n",__func__);
+ 		//s_rules_counter = 0;
+		printk(KERN_INFO "Got the flag NLM_F_ACK, nlh->nlmsg_flags =%d\n",nlh->nlmsg_flags);
+		//if(nlh->nlmsg_flags&NLM_F_ACK)
+		{
+			complete(&comp);	
+		}
+		break;
         case NLMSG_ERROR:
-
+		printk("%s  --------------NLMSG_ERROR\n",__func__);
 		nlerr = (struct nlmsgerr*)NLMSG_DATA(nlh);
 		//printf("Got some error: %d \n",nlerr->error);
-		complete(&comp);
-	
+		//complete(&comp);
+		break;
 	default:
 		printk("%s: expect something else got %#x\n", __func__, type);
 	        return -EINVAL;
@@ -119,7 +138,7 @@ nl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 //    printk("%s: %02x %02x \n", __func__,
 //            *(unsigned int*)&data[0],
 //            *(unsigned int*)&data[4]);
-
+    printk(KERN_INFO "Leave %s \n",__func__);
     return 0;
 }
 
@@ -132,7 +151,7 @@ nl_skb_rcv_msg(struct sk_buff *skb)
 }
 
 int  
-nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_size)
+nl_send_msg(struct sock * nl_sk,int destpid, int type, int flags,char* msg,int msg_size)
 {
     struct nlmsghdr *nlh;
     int pid;
@@ -145,9 +164,9 @@ nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_
     
     // msg_size=strlen(msg);
     
-    nlh=(struct nlmsghdr*)skb->data;
+    //nlh=(struct nlmsghdr*)skb->data;
     //printk(KERN_INFO "Netlink received msg payload: %s\n",(char*)nlmsg_data(nlh));
-    pid = nlh->nlmsg_pid; /*pid of sending process */
+    pid = destpid; // nlh->nlmsg_pid; /*pid of sending process */
 
     skb_out = nlmsg_new(msg_size,0);
 
@@ -156,7 +175,7 @@ nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_
         printk(KERN_ERR "Failed to allocate new skb\n");
         return -1;
     } 
-    nlh=nlmsg_put(skb_out,0,0,/*NLMSG_DONE*/type,msg_size,NLM_F_ACK);
+    nlh=nlmsg_put(skb_out,0,0,/*NLMSG_DONE*/type,msg_size,flags);
 
     NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
     memcpy(nlmsg_data(nlh),msg,msg_size);

@@ -25,9 +25,9 @@ struct nf_hook_ops nfho_out;  //net filter hook option struct
 
 DEFINE_SPINLOCK(list_mutex);	
 
-#define skb_filter_name "skb_filter"
+#define skb_filter_name "bf_filter"
 
-int nl_send_msg(struct sock * nl_sk,struct sk_buff *skb, int type,char* msg,int msg_size);
+int nl_send_msg(struct sock * nl_sk,int destpid, int type,int flags,char* msg,int msg_size);
 void wfc(void);
 
 typedef struct filter_rule_list {
@@ -118,9 +118,7 @@ static  void init_rules(void)
 static void del_rules(void)
 { 
     struct filter_rule_list *a_rule, *tmp;
-    printk(KERN_INFO "kernel module unloaded.\n");
-    printk(KERN_INFO "deleting the list using list_for_each_entry_safe()\n");
-    
+        
     list_for_each_entry_safe(a_rule, tmp, &lst_fr_udp.protocol_list, protocol_list){
          list_del(&a_rule->protocol_list);
     }
@@ -164,9 +162,9 @@ void delete_rule(struct filter_rule* fr)
 {
 	struct filter_rule_list *a_rule, *tmp;
 
-spin_lock(&list_mutex);
+//spin_lock(&list_mutex);
 	list_for_each_entry_safe(a_rule, tmp, &lst_fr_udp.protocol_list, protocol_list){
-		if(cmp_rule(&a_rule->fr,fr))
+		if(cmp_rule(&a_rule->fr,fr)==0)
 		{		
 			list_del(&a_rule->protocol_list);
 			break;
@@ -174,7 +172,7 @@ spin_lock(&list_mutex);
 	}
 
 	list_for_each_entry_safe(a_rule, tmp, &lst_fr_tcp.protocol_list, protocol_list){
-		if(cmp_rule(&a_rule->fr,fr))
+		if(cmp_rule(&a_rule->fr,fr)==0)
 		{		
 			list_del(&a_rule->protocol_list);
 			break;
@@ -184,32 +182,39 @@ spin_lock(&list_mutex);
 	hash_table_del_key_safe(&map_fr,(const char*)&fr->base_rule, sizeof(struct filter_rule_base));
 	
 	list_for_each_entry_safe(a_rule, tmp, &lst_fr.full_list, full_list){
-		if(cmp_rule(&a_rule->fr,fr)){		
+		if(cmp_rule(&a_rule->fr,fr)==0){		
 			list_del(&a_rule->full_list);
 			kfree(a_rule);
 		}
 	}
-spin_unlock(&list_mutex);	
+//spin_unlock(&list_mutex);	
 	
 }
 
-void list_rules(struct sock * nl_sk,struct sk_buff *skb)
+void list_rules(struct sock * nl_sk,int destpid)
 {
     struct filter_rule_list *a_rule; 
     int i=0,ret; 
+    int flags = 0;
     list_for_each_entry(a_rule, &lst_fr.full_list, full_list) {
-	printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i++,
+
+        if(++i%220==0) { flags = NLM_F_ACK; };
+	
+	printk(KERN_INFO "#%d Src_addr: %X; dst_addr: %X; proto: %d; src_port: %d dst_port: %d\n", i,
 			a_rule->fr.base_rule.s_addr.addr, a_rule->fr.base_rule.d_addr.addr, 
 			a_rule->fr.base_rule.proto, a_rule->fr.base_rule.src_port, a_rule->fr.base_rule.dst_port);
 
-	if(i%20==0) wfc();
-
 	a_rule->fr.id = i; 	
-	ret=nl_send_msg(nl_sk,skb, MSG_DATA, (char*)&a_rule->fr,sizeof(a_rule->fr));
-	if(ret<0) return;
+	ret=nl_send_msg(nl_sk,destpid, MSG_DATA, flags,(char*)&a_rule->fr,sizeof(a_rule->fr));
+	if(ret<0)
+		 return;
+	
+	if(flags == NLM_F_ACK) {
+	 	flags = 0; wfc();
+	}
     }
     
-    nl_send_msg(nl_sk,skb, MSG_DONE, (char*)&a_rule->fr,sizeof(a_rule->fr));
+    nl_send_msg(nl_sk,destpid, MSG_DONE, 0, (char*)&a_rule->fr,sizeof(a_rule->fr));
 }
 
 int find_rule(unsigned char* data)
@@ -218,13 +223,11 @@ int find_rule(unsigned char* data)
 	if ((hentry =
 	     hash_table_lookup_key(&map_fr, data,
 				   sizeof(filter_rule_base_t))) == NULL) {
-		// printk("Could not find entry for ");
 	return -1;
 	} else {
 		/* just like the listr_item() */
 		struct filter_rule_list *tmp;
 		tmp = hash_entry(hentry, struct filter_rule_list, entry);
-	    	// printk("Found data src port: %d  dst_port: %d d_addr: %d s_addr: %d proto: %d\n",tmp->fr.base_rule.src_port,tmp->fr.base_rule.dst_port,tmp->fr.base_rule.d_addr.addr,tmp->fr.base_rule.s_addr.addr,tmp->fr.base_rule.proto);
 	return 0;	
 	}
 }
@@ -253,7 +256,7 @@ unsigned int hook_func(unsigned int hooknum,
     ethheader = (struct ethhdr*) skb_mac_header(sock_buff); 
     ip_header = (struct iphdr *) skb_network_header(sock_buff);
  
-    if(!sock_buff || !ip_header || !ethheader)
+    if(!sock_buff || !ip_header || !ethheader || filter_value>0)
         return NF_ACCEPT;
 
 
@@ -263,7 +266,7 @@ unsigned int hook_func(unsigned int hooknum,
         if(udp_header){
 	    struct filter_rule_list  *a_rule;
 //spin_lock(&list_mutex);   
-#if 0
+#if 1
 	   list_for_each_entry(a_rule, &lst_fr_udp.protocol_list, protocol_list) {
 		if((ntohs(udp_header->source) == a_rule->fr.base_rule.src_port || ntohs(udp_header->dest) == a_rule->fr.base_rule.dst_port) &&
 		!a_rule->fr.off){
@@ -279,23 +282,38 @@ unsigned int hook_func(unsigned int hooknum,
         }else
             return NF_DROP;
     } else  if(ip_header->protocol == IPPROTO_TCP){
-        printk(KERN_INFO "---------- TCP -------------\n");
+        //printk(KERN_INFO "---------- TCP -------------\n");
         tcp_header = (struct tcphdr *)(skb_transport_header(sock_buff) + ip_hdrlen(sock_buff));
-        if(tcp_header){		
+        if(tcp_header){	
+	    struct filter_rule_list  *a_rule;
+//spin_lock(&list_mutex);   
+#if 1
+	   list_for_each_entry(a_rule, &lst_fr_tcp.protocol_list, protocol_list) {
+		if((ntohs(tcp_header->source) == a_rule->fr.base_rule.src_port || ntohs(tcp_header->dest) == a_rule->fr.base_rule.dst_port) &&
+		!a_rule->fr.off){
+			printk(KERN_INFO "TID %d SRC: (%u.%u.%u.%u):%d --> DST: (%u.%u.%u.%u):%d proto: %d; \n", 
+				(int)current->pid, NIPQUAD(ip_header->saddr),ntohs(tcp_header->source),
+				NIPQUAD(ip_header->daddr),ntohs(tcp_header->dest), a_rule->fr.base_rule.proto);
+			return NF_DROP;
+		}
+	    }
+#endif
+//spin_unlock(&list_mutex);
+	
             //printk(KERN_INFO "SRC: (%u.%u.%u.%u) --> DST: (%u.%u.%u.%u)\n",NIPQUAD(ip_header->saddr),NIPQUAD(ip_header->daddr));
             //printk(KERN_INFO "ICMP type: %d - ICMP code: %d\n",icmp_header->type, icmp_header->code);
         }else
             return NF_DROP;	
     } else  if(ip_header->protocol == IPPROTO_ICMP){
-        printk(KERN_INFO "---------- ICMP -------------\n");
+        //printk(KERN_INFO "---------- ICMP -------------\n");
         icmp_header = (struct icmphdr *)(skb_transport_header(sock_buff) + ip_hdrlen(sock_buff));
         if(icmp_header){		
 	    // printk(KERN_INFO "SRC: (%pM) --> DST: (%pM)\n",ethheader->h_source,ethheader->h_dest);
 
             if(ethheader && skb_mac_header_was_set(skb)) printk(KERN_INFO "SRC: (%pM) --> DST: (%pM)\n",ethheader->h_source,ethheader->h_dest); 
 
-            printk(KERN_INFO "SRC: (%u.%u.%u.%u) --> DST: (%u.%u.%u.%u)\n",NIPQUAD(ip_header->saddr),NIPQUAD(ip_header->daddr));
-            printk(KERN_INFO "ICMP type: %d - ICMP code: %d  in %s  out %s \n",icmp_header->type, icmp_header->code,in!=NULL?"true":"false",out!=NULL?"true":"false");
+            //printk(KERN_INFO "SRC: (%u.%u.%u.%u) --> DST: (%u.%u.%u.%u)\n",NIPQUAD(ip_header->saddr),NIPQUAD(ip_header->daddr));
+            //printk(KERN_INFO "ICMP type: %d - ICMP code: %d  in %s  out %s \n",icmp_header->type, icmp_header->code,in!=NULL?"true":"false",out!=NULL?"true":"false");
         }else
             return NF_DROP;	
     }
@@ -331,13 +349,13 @@ int skb_write(struct file *file, const char *buffer, unsigned long len,
     unsigned char userData;
  
     if(len > PAGE_SIZE || len < 0){
-        printk(KERN_INFO "SKB System: cannot allow space for data\n");
+        printk(KERN_INFO "Barrier Mini-Firewall: cannot allow space for data\n");
         return -ENOSPC;
     }
  
     /* write data to the buffer */
     if(copy_from_user(&userData, buffer, 1)){
-        printk(KERN_INFO "SKB System: cannot copy data from userspace. OH NOES\n");
+        printk(KERN_INFO "Barrier Mini-Firewall: cannot copy data from userspace. OH NOES\n");
         return -EFAULT;
     }
  
@@ -351,7 +369,6 @@ int init_module()
 
     struct proc_dir_entry proc_root;
     int ret = 0;
-    //daemonize("Hello_Server_z");
     // LIST_HEAD(lst_fr);  // This macro leads to kernel panic on  list_add
     INIT_LIST_HEAD(&lst_fr.full_list);	
     INIT_LIST_HEAD(&lst_fr_udp.protocol_list);	
@@ -369,7 +386,7 @@ int init_module()
         if( skb_filter )
             remove_proc_entry( skb_filter_name, &proc_root);
  
-        printk(KERN_INFO "SKB Filter: Could not allocate memory.\n");
+        printk(KERN_INFO "Barrier Mini-Firewall: Could not allocate memory.\n");
         goto error;
  
     }else{		
@@ -402,7 +419,7 @@ int init_module()
 #endif
     nf_register_hook(&nfho_in);
 
-    printk(KERN_INFO "Registering SK Parse Module\n");
+    printk(KERN_INFO "Registering Barrier Mini-Firewall module\n");
     //
     nl_init();
 
@@ -424,9 +441,9 @@ void cleanup_module()
     
     //mutex_destroy(&list_mutex);
     
-    printk(KERN_INFO "Unregistered the SK Parse Module\n");
+    printk(KERN_INFO "Unregistered the Barrier Mini-Firewall module\n");
 }
  
-MODULE_AUTHOR("Erik Schweigert");
-MODULE_DESCRIPTION("SK Buff Parse Module");
+MODULE_AUTHOR("Yaroslav Tarasov");
+MODULE_DESCRIPTION("Barrier Mini-Firewall module");
 MODULE_LICENSE("GPL");
