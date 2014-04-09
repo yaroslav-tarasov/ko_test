@@ -273,6 +273,12 @@ exit_printhelp(/*const struct xtables_rule_match *matches*/)
 	exit(0);
 }
 
+static int
+nl_rcv_msg(struct nl_msg *msg, void *arg)
+{
+   printf("Goottooooooototototototo  callback \n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -292,8 +298,14 @@ main(int argc, char *argv[])
 #ifdef HAVE_LIBNL3
      nls = nl_socket_alloc();
 #else
-     nls = nl_handle_alloc();
+   //  nls = nl_handle_alloc();  
+     struct nl_cb * cb = nl_cb_alloc(NL_CB_DEFAULT);
+     nl_cb_set(cb, NL_CB_MSG_IN, NL_CB_DEFAULT,  nl_rcv_msg, NULL);
+     nls = nl_handle_alloc_cb(cb);
 #endif
+   
+
+
 
 
     if (!nls) {
@@ -377,7 +389,8 @@ main(int argc, char *argv[])
 	int nlerrr =0;
 
         printf("List of rules:\n");
-	do{
+	do{ 
+		nl_recvmsgs_default(nls);
 		msgn = n = nl_recv(nls, NULL, &nl_msg,&creds);
 		hdr = (struct nlmsghdr *) nl_msg;
 		msg = NLMSG_DATA((struct nlmsghdr *)nl_msg);
