@@ -353,9 +353,7 @@ main(int argc, char *argv[])
         printf("CMD_PRINT_RULES\n");
 	// printf("pid %d:\n",getpid());
 
-	filter_rule_t emsg;	
-	memset(&emsg,0,sizeof(filter_rule_t));  
-	ret = nl_send_simple(nls, NLMSG_ERROR, 0, &emsg, sizeof(filter_rule_t));
+
 
     	ret = nl_send_simple(nls, MSG_GET_RULES, 0, &fr, sizeof(fr));
 
@@ -390,7 +388,7 @@ main(int argc, char *argv[])
 
         printf("List of rules:\n");
 	do{ 
-		nl_recvmsgs_default(nls);
+		//nl_recvmsgs_default(nls);
 		msgn = n = nl_recv(nls, NULL, &nl_msg,&creds);
 		hdr = (struct nlmsghdr *) nl_msg;
 		msg = NLMSG_DATA((struct nlmsghdr *)nl_msg);
